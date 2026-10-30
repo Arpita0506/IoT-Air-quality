@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny: Block all unspecified collection access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Rules for 'sensorReadings' collection
+    match /sensorReadings/{readingId} {
+      
+      // Allow users to read only their own readings
+      allow read: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+
+      // Allow creation only if:
+      // 1. User is authenticated anonymously or with valid credentials
+      // 2. Document owner matches authenticated UID
+      // 3. Exactly the permitted 6 fields exist (no extra/unpermitted fields)
+      // 4. Data types and constraints match expected telemetry schema
+      allow create: if request.auth != null
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'deviceId',
+          'temperature',
+          'humidity',
+          'airQualityIndex',
+          'timestamp',
+          'ownerUid'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'deviceId',
+          'temperature',
+          'humidity',
+          'airQualityIndex',
+          'timestamp',
+          'ownerUid'
+        ])
+        && request.resource.data.deviceId is string
+        && request.resource.data.deviceId.size() > 0
+        && request.resource.data.temperature is number
+        && request.resource.data.humidity is number
+        && request.resource.data.humidity >= 0 && request.resource.data.humidity <= 100
+        && request.resource.data.airQualityIndex is number
+        && request.resource.data.airQualityIndex >= 0
+        && request.resource.data.timestamp is timestamp;
+
+      // Disallow all updates and deletions
+      allow update, delete: if false;
+    }
+  }
+}
